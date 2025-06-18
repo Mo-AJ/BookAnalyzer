@@ -1,0 +1,1 @@
+{"book_id": "9", "title": "Abraham Lincoln's First Inaugural Address by Abraham Lincoln", "author": "27 by Abraham Lincoln", "names_only": true, "characters": [{"name": "the people", "mentions": 2}, {"name": "Lincoln", "mentions": 1}], "interactions": [{"from": "Lincoln", "to": "the people", "count": 1, "strength": 0}]}

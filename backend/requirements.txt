@@ -1,6 +1,15 @@
-Flask==3.0.0
-Flask-CORS==4.0.0
-python-dotenv==1.0.0
-requests==2.31.0
+# --- env ---
+python-dotenv==1.0.1
+# --- core web stack ---
+Flask==3.0.3           
+flask-cors==4.0.0     
+# --- scraping/HTTP ---
+requests==2.32.3     
+beautifulsoup4==4.12.3
+# --- Groq LLM client (sync + async) ---
 groq==0.28.0
-beautifulsoup4==4.12.2 
+# --- token counting ---
+tiktoken==0.6.0        
+# --- optimization ---
+aiofiles==23.2.1       # faster async file cache writes 
+

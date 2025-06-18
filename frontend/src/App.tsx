@@ -8,6 +8,7 @@ interface Character {
 interface Interaction {
   from: string;
   to: string;
+  count: number;
   strength: number;
 }
 
@@ -23,6 +24,7 @@ function App() {
   const [bookId, setBookId] = useState('');
   const [analysis, setAnalysis] = useState<BookAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
+  const [namesOnly, setNamesOnly] = useState(false);
   const [error, setError] = useState('');
 
   const analyzeBook = async () => {
@@ -38,7 +40,10 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ book_id: bookId }),
+        body: JSON.stringify({ 
+          book_id: bookId,
+          names_only: namesOnly 
+        }),
       });
 
       if (!response.ok) {
@@ -65,15 +70,29 @@ function App() {
       <h1>Book Character Analyzer</h1>
       
       <form onSubmit={handleSubmit}>
-        <label>
-          Book ID:
-          <input
-            type="text"
-            value={bookId}
-            onChange={(e) => setBookId(e.target.value)}
-            placeholder="Enter Project Gutenberg book ID (e.g., 1661)"
-          />
-        </label>
+        <div>
+          <label>
+            Book ID:
+            <input
+              type="text"
+              value={bookId}
+              onChange={(e) => setBookId(e.target.value)}
+              placeholder="Enter Project Gutenberg book ID (e.g., 1661)"
+            />
+          </label>
+        </div>
+        
+        <div>
+          <label>
+            <input
+              type="checkbox"
+              checked={namesOnly}
+              onChange={(e) => setNamesOnly(e.target.checked)}
+            />
+            Names only (skips unnamed characters e.g. "the masked man")
+          </label>
+        </div>
+        
         <button type="submit" disabled={loading}>
           {loading ? 'Analyzing...' : 'Analyze Book'}
         </button>
