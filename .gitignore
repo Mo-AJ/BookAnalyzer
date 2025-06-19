@@ -28,6 +28,10 @@ wheels/
 *.egg
 MANIFEST
 
+# Application cache
+cache/
+backend/cache/
+
 # Virtual environments
 .env
 .venv
