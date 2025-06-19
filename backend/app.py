@@ -271,7 +271,7 @@ def fetch_book(book_id: str) -> Dict[str, Any] | None:
     meta = cache.load("books_meta", book_id)
     if meta is None:
         html_url = f"https://www.gutenberg.org/ebooks/{book_id}"
-        html_res = requests.get(html_url, timeout=30)
+        html_res = requests.get(html_url, timeout=10)
 
         title, author = f"Book {book_id}", "Unknown"
         if html_res.status_code == 200:
@@ -288,7 +288,7 @@ def fetch_book(book_id: str) -> Dict[str, Any] | None:
 
     # ---------- text  ---------- #
     content_url = f"https://www.gutenberg.org/files/{book_id}/{book_id}-0.txt"
-    txt_res = requests.get(content_url, timeout=30)
+    txt_res = requests.get(content_url, timeout=15)
     if txt_res.status_code != 200:
         log(f"Book text not found: {content_url}")
         return None
@@ -327,7 +327,7 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     try:
         results = await asyncio.wait_for(
             asyncio.gather(*tasks, return_exceptions=True),
-            timeout=300.0  # 5 minute overall timeout
+            timeout=45  # 45 seconds overall timeout
         )
     except asyncio.TimeoutError:
         log("Analysis timed out, returning partial results")
