@@ -97,14 +97,12 @@ cache = FileCache()
 # TOKEN CHUNKING
 # ---------------------------------------------------------------------------
 
-# Simple character-based tokenizer
+# simple character-based tokenizer
 class SimpleTokenizer:
     def encode(self, text: str) -> List[int]:
-        # Simple character-based encoding
         return [ord(c) for c in text]
     
     def decode(self, tokens: List[int]) -> str:
-        # Simple character-based decoding
         return ''.join(chr(t) for t in tokens)
 
 enc = SimpleTokenizer()
@@ -279,7 +277,7 @@ def fetch_book(book_id: str) -> Dict[str, Any] | None:
         meta = {"id": book_id, "title": title, "author": author}
         cache.save(meta, "books_meta", book_id)
 
-    # ---------- text (not cached, not needed for caching) ---------- #
+    # ---------- text  ---------- #
     content_url = f"https://www.gutenberg.org/files/{book_id}/{book_id}-0.txt"
     txt_res = requests.get(content_url, timeout=30)
     if txt_res.status_code != 200:
@@ -390,7 +388,6 @@ def test_book(book_id: str):
 # ---------------------------------------------------------------------------
 # CHATBOT
 # ---------------------------------------------------------------------------
-
 
 async def call_groq_simple(prompt: str,
                            sem: asyncio.Semaphore) -> str:
