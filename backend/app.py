@@ -234,23 +234,32 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                         "content": build_prompt(idx, total, names_only) + chunk,
                     }
                 ]
-                resp = await groq_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    tools=TOOLS,
-                    tool_choice={"type": "function",
-                                 "function": {"name": "extract_characters_and_interactions"}},
-                    max_completion_tokens=max_comp,
-                    temperature=0.1,    # low so that it follows the schema with less variation
+                resp = await asyncio.wait_for(
+                    groq_client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        tools=TOOLS,
+                        tool_choice={"type": "function",
+                                     "function": {"name": "extract_characters_and_interactions"}},
+                        max_completion_tokens=max_comp,
+                        temperature=0.1,    # low so that it follows the schema with less variation
+                    ),
+                    timeout=30.0  # 30 second timeout per request
                 )
 
                 tool_call = resp.choices[0].message.tool_calls[0]
                 result = json.loads(tool_call.function.arguments)
                 print(f"success - model {model} completed chunk {idx+1}")
                 return result
+            except asyncio.TimeoutError:
+                log(f"Model {model} timed out on chunk {idx+1}")
+                continue
             except Exception as ex:
                 log(f"Model {model} failed on chunk {idx+1}: {ex}\n")
                 await asyncio.sleep(1)
+        
+        # If all models fail, return empty result instead of crashing
+        log(f"All models failed for chunk {idx+1}, returning empty result")
         return {"characters": [], "interactions": []}
 
 # ---------------------------------------------------------------------------
@@ -311,16 +320,35 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
     analysis_chunks = chunk_by_tokens(book["text"], max_in=chunk_size, max_total=MAX_TOTAL_BOOK_TOKENS)
 
-    # async calls
+    # async calls with overall timeout
     sem = asyncio.Semaphore(PARALLEL_LIMIT)
     tasks = [call_groq(c, i, len(analysis_chunks), names_only, sem) for i, c in enumerate(analysis_chunks)]
-    results = await asyncio.gather(*tasks)
+    
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*tasks, return_exceptions=True),
+            timeout=300.0  # 5 minute overall timeout
+        )
+    except asyncio.TimeoutError:
+        log("Analysis timed out, returning partial results")
+        return {
+            "book_id": book_id,
+            "title": book["title"],
+            "author": book["author"],
+            "names_only": names_only,
+            "characters": [],
+            "interactions": [],
+            "error": "Analysis timed out - partial results only"
+        }
 
-    # merge results
+    # merge results, handling exceptions
     char_counter: Counter[str] = Counter()
     edge_data: defaultdict[Tuple[str, str], Dict[str, int]] = defaultdict(lambda: {"count": 0, "strength": 0})
 
-    for res in results:
+    for i, res in enumerate(results):
+        if isinstance(res, Exception):
+            log(f"Chunk {i+1} failed with exception: {res}")
+            continue
         for ch in res.get("characters", []):
             char_counter[ch["name"]] += ch["mentions"]
         for inter in res.get("interactions", []):
