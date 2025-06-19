@@ -11,12 +11,6 @@ from typing import Any, Dict, List, Tuple
 import urllib.parse
 
 import requests
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-    print("Warning: tiktoken not available, using fallback tokenizer")
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -102,26 +96,19 @@ cache = FileCache()
 # ---------------------------------------------------------------------------
 # TOKEN CHUNKING
 # ---------------------------------------------------------------------------
-if TIKTOKEN_AVAILABLE:
-    try:
-        enc = tiktoken.get_encoding("cl100k_base")
-    except KeyError:                     
-        print("Tokens failed to encrypt")
-        TIKTOKEN_AVAILABLE = False
 
-if not TIKTOKEN_AVAILABLE:
-    # Fallback tokenizer - simple character-based approach
-    class SimpleTokenizer:
-        def encode(self, text: str) -> List[int]:
-            # Simple character-based encoding
-            return [ord(c) for c in text]
-        
-        def decode(self, tokens: List[int]) -> str:
-            # Simple character-based decoding
-            return ''.join(chr(t) for t in tokens)
+# Simple character-based tokenizer
+class SimpleTokenizer:
+    def encode(self, text: str) -> List[int]:
+        # Simple character-based encoding
+        return [ord(c) for c in text]
     
-    enc = SimpleTokenizer()
-    print("Using fallback tokenizer")
+    def decode(self, tokens: List[int]) -> str:
+        # Simple character-based decoding
+        return ''.join(chr(t) for t in tokens)
+
+enc = SimpleTokenizer()
+print("Using simple character-based tokenizer")
 
 def chunk_by_tokens( text: str, max_in: int = MAX_TOKENS_INPUT,
     overlap: int = OVERLAP_TOKENS, max_total: int = MAX_TOTAL_BOOK_TOKENS) -> List[str]:
