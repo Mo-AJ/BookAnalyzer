@@ -3,6 +3,7 @@ python-dotenv==1.0.1
 # --- core web stack ---
 Flask==3.0.3           
 flask-cors==4.0.0     
+gunicorn==21.2.0
 # --- scraping/HTTP ---
 requests==2.32.3     
 beautifulsoup4==4.12.3

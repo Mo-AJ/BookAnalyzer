@@ -298,17 +298,15 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     if (cached_graph):
         return cached_graph
 
-    # Save ALL chunks to cache for chatbot use (no token limit)
+    # save ALL chunks to cache for chatbot use (no token limit)
     all_chunks = chunk_by_tokens(book["text"], max_in=MAX_TOKENS_INPUT, overlap=OVERLAP_TOKENS, max_total=None)
     cache.save(all_chunks, "books_chunks", book_id)
 
-    # Use limited chunks for analysis (20k token limit)
+    # use limited chunks for analysis - not whole book
     chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
     analysis_chunks = chunk_by_tokens(book["text"], max_in=chunk_size, max_total=MAX_TOTAL_BOOK_TOKENS)
 
-    # if DEBUG:   
-    #     chunks = chunks[:4]    # only use a few chunks for debugging
-
+    # async calls
     sem = asyncio.Semaphore(PARALLEL_LIMIT)
     tasks = [call_groq(c, i, len(analysis_chunks), names_only, sem) for i, c in enumerate(analysis_chunks)]
     results = await asyncio.gather(*tasks)
@@ -573,7 +571,7 @@ def character_image():
     if not name:
         return {"error": "missing name"}, 400
 
-    # 1) try Wikipedia summary endpoint
+    # try Wikipedia summary endpoint
     wiki = (
         "https://en.wikipedia.org/api/rest_v1/page/summary/"
         + urllib.parse.quote(name)
@@ -586,7 +584,7 @@ def character_image():
     except Exception:
         pass  # network or JSON error → ignore
 
-    # 2) deterministic SVG avatar as fallback
+    # deterministic SVG avatar as fallback
     avatar = (
         "https://api.dicebear.com/7.x/bottts/svg?seed="
         + urllib.parse.quote(name)
