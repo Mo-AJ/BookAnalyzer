@@ -41,7 +41,6 @@ function App() {
   const [chunkSelection, setChunkSelection] = useState<'random' | 'user'>('random');
   const [selectedChunks, setSelectedChunks] = useState<number[]>([]);
   const [chunkCount, setChunkCount] = useState<number | null>(null);
-  const [chunkCountLoading, setChunkCountLoading] = useState(false);
   const [characterImages, setCharacterImages] = useState<{[key: string]: string}>({});
   const [imagesLoading, setImagesLoading] = useState(false);
 
@@ -85,7 +84,6 @@ function App() {
   };
 
   const fetchChunkCount = async (bookId: string) => {
-    setChunkCountLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chunks/${bookId}`);
       if (response.ok) {
@@ -94,8 +92,6 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to fetch chunk count:', err);
-    } finally {
-      setChunkCountLoading(false);
     }
   };
 
