@@ -34,8 +34,9 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 
 MODEL_PRIMARY = "llama-3.3-70b-versatile"
-MODEL_FALLBACK = "llama-3.1-8b-instant"
-MAX_COMPLETION_TOKENS     = 1_024
+MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
+MODEL_FALLBACK2 = "llama-3.1-8b-instant"
+MAX_COMPLETION_TOKENS = 1_024
 MAX_TOKENS_INPUT = 6_000            # keeps total within 8 192 context window
 OVERLAP_TOKENS = 200
 PARALLEL_LIMIT = 12                 # max concurrent Groq requests
@@ -44,10 +45,13 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 ## Debugging configs
 DEBUG = bool(os.getenv("DEBUG", "1"))
-MODEL_DEBUG = "llama3-70b-8192"      # good JSON + generous rate-limits
-MODEL_DEBUG2 = "llama3-8b-8192"
+MODEL_DEBUG2 = "meta-llama/llama-4-maverick-17b-128e-instruct"
+MODEL_DEBUG = "meta-llama/llama-4-scout-17b-16e-instruct"
+# MODEL_DEBUG = "llama-3.3-70b-versatile"
+#MODEL_DEBUG2 = "llama3-70b-8192"      # good JSON + generous rate-limits
 MAX_COMPLETION_TOKENS_DBG = 256
 MAX_TOKENS_INPUT_DEBUG    = 1500    
+
 
 
 load_dotenv()
@@ -64,7 +68,7 @@ def log(msg: str) -> None:
 
 
 class FileCache:
-    """Dead-simple file-system cache. Stores & retrieves JSON-serialisable objects."""
+    """file-system cache that stores and retrieves JSON objects."""
 
     @staticmethod
     def _path(*parts: str) -> Path:
@@ -91,10 +95,10 @@ cache = FileCache()
 # TOKEN CHUNKING
 # ---------------------------------------------------------------------------
 try:
-    enc = tiktoken.encoding_for_model("gpt-4o")
-except KeyError:                     # older tiktoken build
-    print("Warning: tiktoken build is old")
     enc = tiktoken.get_encoding("cl100k_base")
+except KeyError:                     
+    print("Tokens failed to encrypt")
+    exit()
 
 def chunk_by_tokens(text: str, max_in: int = MAX_TOKENS_INPUT, overlap: int = OVERLAP_TOKENS) -> List[str]:
     tokens = enc.encode(text)
@@ -172,7 +176,7 @@ def build_prompt(idx: int, total: int, names_only: bool) -> str:
 
     names_rule = (
         "- **names_only mode is ON**: **ignore** entities that are not *proper names* "
-        "(skip descriptors like “the red man”, “the nurse”, “God”)."
+        "(skip descriptors like 'the red man', 'the nurse', 'God')."
         if names_only else
         "- Include any recurring character or well-defined entity (named or descriptive)."
     )
@@ -183,12 +187,13 @@ def build_prompt(idx: int, total: int, names_only: bool) -> str:
 # ---------------------------------------------------------------------------
 async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asyncio.Semaphore) -> Dict[str, Any]:
     """Groq request with fallback model and debug models"""
+
     async with sem:
 
         models: tuple[str, ...] = (
-            (MODEL_DEBUG, MODEL_DEBUG2)
+            (MODEL_DEBUG, MODEL_DEBUG2) # more generous rate limits and lower qualities, so exposes bugs
             if DEBUG else
-            (MODEL_PRIMARY, MODEL_FALLBACK)
+            (MODEL_PRIMARY, MODEL_FALLBACK, MODEL_FALLBACK2)
         )
 
         max_comp = MAX_COMPLETION_TOKENS_DBG if DEBUG else MAX_COMPLETION_TOKENS
@@ -212,13 +217,13 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                     tool_choice={"type": "function",
                                  "function": {"name": "extract_characters_and_interactions"}},
                     max_completion_tokens=max_comp,
-                    temperature=0.1,
+                    temperature=0.1,    # low so that it follows the schema with less variation
                 )
 
                 tool_call = resp.choices[0].message.tool_calls[0]
                 return json.loads(tool_call.function.arguments)
             except Exception as ex:
-                log(f"Model {model} failed on chunk {idx+1}: {ex}")
+                log(f"Model {model} failed on chunk {idx+1}: {ex}\n")
                 await asyncio.sleep(1)
         return {"characters": [], "interactions": []}
 
@@ -226,42 +231,36 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
 # BOOK DOWNLOAD & SCRAPE
 # ---------------------------------------------------------------------------
 def fetch_book(book_id: str) -> Dict[str, Any] | None:
-    cached = cache.load("books", book_id)
-    if cached:
-        log(f"Cache hit: book {book_id}")
-        return cached
+    
+    # ---------- meta (cached) ---------- #
+    meta = cache.load("books_meta", book_id)
+    if meta is None:
+        html_url = f"https://www.gutenberg.org/ebooks/{book_id}"
+        html_res = requests.get(html_url, timeout=30)
 
+        title, author = f"Book {book_id}", "Unknown"
+        if html_res.status_code == 200:
+            soup = BeautifulSoup(html_res.text, "html.parser")
+            h1 = soup.find("h1")
+            if (h1):
+                raw = h1.get_text(" ", strip=True)
+                title = raw.split(" by ", 1)[0].strip()  # removes ' by ' <author>
+                author = raw.split(" by ", 1)[1].strip() 
+    
+
+        meta = {"id": book_id, "title": title, "author": author}
+        cache.save(meta, "books_meta", book_id)
+
+    # ---------- text (not cached, not needed for caching) ---------- #
     content_url = f"https://www.gutenberg.org/files/{book_id}/{book_id}-0.txt"
-    html_url = f"https://www.gutenberg.org/ebooks/{book_id}"
-
     txt_res = requests.get(content_url, timeout=30)
     if txt_res.status_code != 200:
         log(f"Book text not found: {content_url}")
         return None
+    
+    main_text = txt_res.text   # could strip footer and headers but not necessary and negligible
 
-    html_res = requests.get(html_url, timeout=30)
-    title, author = f"Book {book_id}", "Unknown"
-    if html_res.status_code == 200:
-        soup = BeautifulSoup(html_res.text, "html.parser")
-        if (h1 := soup.find("h1")):
-            title = h1.get_text(strip=True)
-        if (a := soup.select_one("a[href*='/ebooks/author/']")):
-            author = a.get_text(strip=True)
-
-    # Strip Gutenberg header/footer
-    lines = txt_res.text.splitlines()
-    start, end = 0, len(lines)
-    for i, l in enumerate(lines):
-        if "*** START OF" in l:
-            start = i + 1
-        if "*** END OF" in l:
-            end = i
-            break
-    main_text = "\n".join(lines[start:end])
-
-    book = {"id": book_id, "title": title, "author": author, "text": main_text}
-    cache.save(book, "books", book_id)
-    return book
+    return {**meta, "text": main_text}
 
 # ---------------------------------------------------------------------------
 # MAIN ANALYSIS PIPELINE
@@ -274,7 +273,8 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
 
     # cache key depends on names_only flag because results differ
     cache_key = f"{book_id}_{'names' if names_only else 'all'}"
-    if (cached_graph := cache.load("graphs", cache_key)):
+    cached_graph = cache.load("graphs", cache_key)
+    if (cached_graph):
         return cached_graph
 
     chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
@@ -341,6 +341,19 @@ def analyze_route():
 
     status = 200 if "error" not in result else 404
     return jsonify(result), status
+
+# to test: curl http://localhost:5001/api/test_book/<id>
+@app.route("/api/test_book/<book_id>")
+def test_book(book_id: str):
+    """Test endpoint to fetch book metadata"""
+    book = fetch_book(book_id)
+    if not book:
+        return jsonify({"error": "Book not found"}), 404
+    
+    return jsonify({
+        "title": book["title"],
+        "author": book["author"]
+    })
 
 @app.route("/api/health")
 def health():

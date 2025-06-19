@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import GraphView from "./GraphView";
 
 interface Character {
   name: string;
@@ -108,7 +109,14 @@ function App() {
         <div>
           <h2>{analysis.title}</h2>
           <p>by {analysis.author}</p>
-          
+
+          {/* graph */}
+          <GraphView
+            characters={analysis.characters}
+            interactions={analysis.interactions}
+          />
+
+          {/* character list */}
           <h3>Characters ({analysis.characters.length})</h3>
           <ul>
             {analysis.characters.map((character, index) => (
@@ -118,11 +126,12 @@ function App() {
             ))}
           </ul>
 
+          {/* interaction list */}  
           <h3>Character Interactions ({analysis.interactions.length})</h3>
           <ul>
             {analysis.interactions.map((interaction, index) => (
               <li key={index}>
-                {interaction.from} ↔ {interaction.to}: {interaction.strength} interactions
+                {interaction.from} ↔ {interaction.to}: {interaction.count} interactions, {interaction.strength} relationship strength
               </li>
             ))}
           </ul>
