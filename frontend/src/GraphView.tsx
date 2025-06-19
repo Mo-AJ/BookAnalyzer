@@ -56,7 +56,7 @@ export default function GraphView({ characters, interactions }: Props) {
 
     fgRef.current
       .d3Force("charge", d3.forceManyBody().strength(-200))
-      .d3Force("link")?.distance(180);
+      .d3Force("link")?.distance(120);
 
     /* keep nodes from overlapping so links don't cross through */
     fgRef.current.d3Force(

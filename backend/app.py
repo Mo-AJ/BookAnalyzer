@@ -24,19 +24,19 @@ from dotenv import load_dotenv
 MODEL_PRIMARY = "llama-3.3-70b-versatile"
 MODEL_FALLBACK2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MAX_TOTAL_BOOK_TOKENS = 16_000 # discard the rest
+MAX_TOTAL_BOOK_TOKENS = 10_000 # discard the rest
 MAX_COMPLETION_TOKENS = 1_024
 MAX_TOKENS_INPUT = 1_024            # keeps total within 8 192 context window
 OVERLAP_TOKENS = 100
-PARALLEL_LIMIT = 10                 # max concurrent Groq requests
+PARALLEL_LIMIT = 8                 # max concurrent Groq requests
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 ## Debugging configs
-MODEL_DEBUG = "qwen-qwq-32b"
+MODEL_DEBUG2 = "qwen-qwq-32b"
 #MODEL_DEBUG = "llama-3.3-70b-versatile"
 MODEL_DEBUG3 = "mistral-saba-24b"
-MODEL_DEBUG2 = "meta-llama/llama-4-maverick-17b-128e-instruct"
+MODEL_DEBUG = "meta-llama/llama-4-maverick-17b-128e-instruct"
 # MODEL_DEBUG = "meta-llama/llama-4-maverick-17b-128e-instruct"
 # MODEL_DEBUG2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 # MODEL_DEBUG = "llama-3.3-70b-versatile"
@@ -244,7 +244,7 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                         max_completion_tokens=max_comp,
                         temperature=0.1,    # low so that it follows the schema with less variation
                     ),
-                    timeout=8.0
+                    timeout=6.0
                 )
 
                 tool_call = resp.choices[0].message.tool_calls[0]
@@ -327,7 +327,7 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     try:
         results = await asyncio.wait_for(
             asyncio.gather(*tasks, return_exceptions=True),
-            timeout=45  # 45 seconds overall timeout
+            timeout=30  # 30 seconds overall timeout
         )
     except asyncio.TimeoutError:
         log("Analysis timed out, returning partial results")
