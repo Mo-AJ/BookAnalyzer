@@ -1,175 +1,111 @@
 # Deployment Guide
 
-This guide will help you deploy the SARJ application to production.
+## Overview
+This application consists of a Flask backend (Python) and a React frontend (TypeScript/Vite). The backend is deployed on Render, and the frontend is deployed on Vercel.
 
-## Backend Deployment (Render/Railway)
+## Prerequisites
+- GitHub repository with your code
+- Groq API key
+- Render account (free tier available)
+- Vercel account (free tier available)
 
-### Option 1: Render
+## Backend Deployment (Render)
 
-1. **Create a Render Account**
-   - Go to [render.com](https://render.com)
-   - Sign up for a free account
+### 1. Create Render Account
+- Go to [render.com](https://render.com)
+- Sign up with your GitHub account
 
-2. **Connect Your Repository**
-   - Click "New +" → "Web Service"
-   - Connect your GitHub repository
-   - Select the repository
+### 2. Create Web Service
+- Click "New +" → "Web Service"
+- Connect your GitHub repository
+- Configure the service:
+  - **Name**: `sarj-backend`
+  - **Environment**: `Python 3`
+  - **Build Command**: `pip install -r backend/requirements.txt`
+  - **Start Command**: `cd backend && gunicorn app:app --bind 0.0.0.0:$PORT`
+  - **Root Directory**: (leave empty)
 
-3. **Configure the Service**
-   - **Name**: `sarj-backend` (or your preferred name)
-   - **Environment**: `Python 3`
-   - **Build Command**: `pip install -r backend/requirements.txt`
-   - **Start Command**: `cd backend && gunicorn app:app --bind 0.0.0.0:$PORT`
-   - **Root Directory**: Leave empty (or set to `backend` if needed)
+### 3. Environment Variables
+Add these environment variables:
+- `GROQ_API_KEY`: Your Groq API key
+- `FLASK_ENV`: `production`
+- `DEBUG`: `false`
 
-4. **Set Environment Variables**
-   - Go to "Environment" tab
-   - Add the following variables:
-     ```
-     GROQ_API_KEY=your_groq_api_key
-     SAMNANOVA_API_KEY=your_samnanova_api_key
-     FLASK_ENV=production
-     DATABASE_URL=sqlite:///./app.db
-     ```
-
-5. **Deploy**
-   - Click "Create Web Service"
-   - Render will automatically deploy your application
-
-### Option 2: Railway
-
-1. **Create a Railway Account**
-   - Go to [railway.app](https://railway.app)
-   - Sign up for a free account
-
-2. **Deploy from GitHub**
-   - Click "Deploy from GitHub repo"
-   - Select your repository
-   - Railway will auto-detect it's a Python application
-
-3. **Configure Environment Variables**
-   - Go to "Variables" tab
-   - Add the same environment variables as above
-
-4. **Deploy**
-   - Railway will automatically deploy your application
+### 4. Deploy
+- Click "Create Web Service"
+- Wait for the build to complete
+- Copy the generated URL (e.g., `https://your-app.onrender.com`)
 
 ## Frontend Deployment (Vercel)
 
-1. **Create a Vercel Account**
-   - Go to [vercel.com](https://vercel.com)
-   - Sign up for a free account
+### 1. Create Vercel Account
+- Go to [vercel.com](https://vercel.com)
+- Sign up with your GitHub account
 
-2. **Import Your Repository**
-   - Click "New Project"
-   - Import your GitHub repository
-   - Vercel will auto-detect it's a Vite React app
+### 2. Import Project
+- Click "New Project"
+- Import your GitHub repository
+- Configure:
+  - **Framework Preset**: `Vite`
+  - **Root Directory**: `frontend`
+  - **Build Command**: `npm run build`
+  - **Output Directory**: `dist`
 
-3. **Configure the Project**
-   - **Framework Preset**: Vite
-   - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
+### 3. Environment Variables
+Add this environment variable:
+- `VITE_API_URL`: Your backend URL from Render
 
-4. **Set Environment Variables**
-   - Go to "Environment Variables" tab
-   - Add:
-     ```
-     VITE_API_URL=https://your-backend-url.onrender.com
-     ```
+### 4. Deploy
+- Click "Deploy"
+- Wait for the build to complete
 
-5. **Deploy**
-   - Click "Deploy"
-   - Vercel will build and deploy your frontend
+## Post-Deployment
 
-## Environment Variables
+### 1. Update API URL
+After the backend is deployed:
+1. Copy the backend URL from Render
+2. Update the `VITE_API_URL` environment variable in Vercel
+3. Redeploy the frontend if needed
 
-### Backend (.env)
-```bash
-# LLM API Keys
-GROQ_API_KEY=your_groq_api_key_here
-SAMNANOVA_API_KEY=your_samnanova_api_key_here
-
-# Flask Configuration
-FLASK_ENV=production
-FLASK_DEBUG=False
-
-# Database Configuration
-DATABASE_URL=sqlite:///./app.db
-
-# Server Configuration
-HOST=0.0.0.0
-PORT=5000
-```
-
-### Frontend (.env.local)
-```bash
-# API Configuration
-VITE_API_URL=https://your-backend-url.onrender.com
-
-# Development Configuration
-VITE_APP_TITLE=SARJ - AI-Powered Application
-```
-
-## Getting API Keys
-
-### Groq API Key
-1. Go to [console.groq.com](https://console.groq.com)
-2. Sign up for a free account
-3. Navigate to "API Keys"
-4. Create a new API key
-5. Copy the key to your environment variables
-
-### SamnaNova API Key
-1. Go to [samnanova.ai](https://samnanova.ai)
-2. Sign up for a free account
-3. Navigate to "API Keys" or "Settings"
-4. Create a new API key
-5. Copy the key to your environment variables
-
-## Custom Domain (Optional)
-
-### Backend Custom Domain
-- **Render**: Go to your service → "Settings" → "Custom Domains"
-- **Railway**: Go to your service → "Settings" → "Domains"
-
-### Frontend Custom Domain
-- **Vercel**: Go to your project → "Settings" → "Domains"
-- Add your custom domain and configure DNS
-
-## Monitoring and Logs
-
-### Backend Monitoring
-- **Render**: Go to your service → "Logs" tab
-- **Railway**: Go to your service → "Logs" tab
-
-### Frontend Monitoring
-- **Vercel**: Go to your project → "Functions" tab for serverless function logs
+### 2. Test the Application
+- Visit your Vercel frontend URL
+- Test uploading and analyzing a book
+- Verify that character images are loading correctly
 
 ## Troubleshooting
 
-### Common Issues
+### Backend Issues
+- **Build fails**: Check that all dependencies are in `requirements.txt`
+- **Runtime errors**: Check the logs in Render dashboard
+- **API key issues**: Verify `GROQ_API_KEY` is set correctly
 
-1. **Backend not starting**
-   - Check if all environment variables are set
-   - Verify the build command is correct
-   - Check logs for Python version compatibility
+### Frontend Issues
+- **API connection**: Verify `VITE_API_URL` points to the correct backend
+- **Build fails**: Check that all dependencies are in `package.json`
+- **CORS errors**: Backend should have CORS configured (already done)
 
-2. **Frontend build failing**
-   - Ensure all dependencies are installed
-   - Check if the API URL is correct
-   - Verify TypeScript compilation
+### Character Images Not Loading
+- Check that the backend `/api/character_image` endpoint is working
+- Verify the frontend is correctly calling the API
+- Check browser console for any errors
 
-3. **CORS errors**
-   - Ensure the backend CORS configuration includes your frontend domain
-   - Check if the API URL is correct in frontend environment variables
+## File Structure
+```
+├── backend/
+│   ├── app.py              # Main Flask application
+│   ├── requirements.txt    # Python dependencies
+│   ├── gunicorn.conf.py    # Production server config
+│   └── Procfile           # Deployment configuration
+├── frontend/
+│   ├── src/
+│   │   └── App.tsx        # Main React component
+│   ├── package.json       # Node.js dependencies
+│   └── .env.local         # Environment variables
+└── deploy.sh              # Deployment automation script
+```
 
-4. **Database issues**
-   - SQLite files are ephemeral on most platforms
-   - Consider using a persistent database like PostgreSQL for production
-
-### Support
-
-- **Render**: [docs.render.com](https://docs.render.com)
-- **Railway**: [docs.railway.app](https://docs.railway.app)
-- **Vercel**: [vercel.com/docs](https://vercel.com/docs) 
+## Notes
+- The backend uses a fallback tokenizer if `tiktoken` is not available
+- Character images are fetched asynchronously after book analysis
+- The application is designed to handle large books efficiently
+- All deployments use free tiers where possible 
