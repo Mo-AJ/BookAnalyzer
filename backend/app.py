@@ -662,6 +662,7 @@ def clear_cache():
         }), 500
 
 # get cache info endpoint
+# curl -X GET https://bookanalyzer.onrender.com/api/cache_info
 @app.route("/api/cache_info")
 def cache_info():
     """Get information about the cache directory"""
