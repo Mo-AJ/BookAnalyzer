@@ -25,11 +25,11 @@ export default function GraphView({ characters, interactions }: Props) {
   const fgRef = useRef<ForceGraphMethods<NodeObject, LinkObject>>(undefined);
   const tipRef = useRef<HTMLDivElement>(null);
 
-  /* top-15 characters only */
+  /* top-20 characters only */
   const { nodes, links } = useMemo(() => {
     const top = [...characters]
       .sort((a, b) => b.mentions - a.mentions)
-      .slice(0, 15);
+      .slice(0, 20);
 
     const allow = new Set(top.map((c) => c.name));
 

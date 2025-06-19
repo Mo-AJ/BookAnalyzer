@@ -21,18 +21,35 @@ interface BookAnalysis {
   interactions: Interaction[];
 }
 
+interface ChatMessage {
+  question: string;
+  answer: string;
+  timestamp: Date;
+}
+
 function App() {
   const [bookId, setBookId] = useState('');
   const [analysis, setAnalysis] = useState<BookAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [namesOnly, setNamesOnly] = useState(false);
   const [error, setError] = useState('');
+  
+  // Chatbot state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chunkSelection, setChunkSelection] = useState<'random' | 'user'>('random');
+  const [selectedChunks, setSelectedChunks] = useState<number[]>([]);
+  const [chunkCount, setChunkCount] = useState<number | null>(null);
+  const [chunkCountLoading, setChunkCountLoading] = useState(false);
 
   const analyzeBook = async () => {
     if (!bookId.trim()) return;
     setLoading(true);
     setError('');
     setAnalysis(null);
+    setChatMessages([]); // Clear chat when analyzing new book
+    setChunkCount(null); // Clear chunk count
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/analyze`, {
         method: 'POST',
@@ -50,6 +67,9 @@ function App() {
       }
       const data = await response.json();
       setAnalysis(data);
+      
+      // Fetch chunk count after successful analysis
+      await fetchChunkCount(data.book_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze book');
     } finally {
@@ -57,9 +77,96 @@ function App() {
     }
   };
 
+  const fetchChunkCount = async (bookId: string) => {
+    setChunkCountLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chunks/${bookId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setChunkCount(data.chunk_count);
+      }
+    } catch (err) {
+      console.error('Failed to fetch chunk count:', err);
+    } finally {
+      setChunkCountLoading(false);
+    }
+  };
+
+  const askQuestion = async () => {
+    if (!currentQuestion.trim() || !analysis) return;
+    
+    setChatLoading(true);
+    try {
+      const requestBody: any = {
+        book_id: analysis.book_id,
+        question: currentQuestion.trim(),
+        chunk_selection: chunkSelection
+      };
+      
+      if (chunkSelection === 'user') {
+        requestBody.selected_chunks = selectedChunks;
+      }
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get answer');
+      }
+      
+      const data = await response.json();
+      const newMessage: ChatMessage = {
+        question: currentQuestion.trim(),
+        answer: data.answer,
+        timestamp: new Date()
+      };
+      
+      setChatMessages(prev => [...prev, newMessage]);
+      setCurrentQuestion('');
+    } catch (err) {
+      const errorMessage: ChatMessage = {
+        question: currentQuestion.trim(),
+        answer: err instanceof Error ? err.message : 'Failed to get answer',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     analyzeBook();
+  };
+
+  const handleChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    askQuestion();
+  };
+
+  const handleChunkToggle = (chunkIndex: number) => {
+    setSelectedChunks(prev => {
+      if (prev.includes(chunkIndex)) {
+        return prev.filter(c => c !== chunkIndex);
+      } else {
+        if (prev.length >= 3) {
+          return prev; // Don't add more than 3
+        }
+        return [...prev, chunkIndex];
+      }
+    });
+  };
+
+  const resetChunkSelection = () => {
+    setSelectedChunks([]);
+    setChunkSelection('random');
   };
 
   return (
@@ -285,6 +392,181 @@ function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Section Divider */}
+            {analysis && <div className="h-1 bg-zinc-600 rounded-full" />}
+
+            {/* Chatbot Card */}
+            {analysis && (
+              <div className="bg-zinc-800 rounded-2xl shadow-lg p-10 border border-zinc-700">
+                <div className="flex items-center mb-8">
+                  <svg className="w-5 h-5" fill="#06b6d4" width="20" height="20">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                  </svg>
+                  <h3 className="text-xl font-semibold text-zinc-100 ml-5">
+                    Ask Questions About the Book
+                  </h3>
+                </div>
+
+                {/* Chunk Selection */}
+                {chunkCount !== null && (
+                  <div className="mb-6 p-4 bg-zinc-700 rounded-lg border border-zinc-600">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-medium text-zinc-200">Chunk Selection</h4>
+                      <span className="text-xs text-zinc-400">
+                        {chunkCount} total chunks available
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-4">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            value="random"
+                            checked={chunkSelection === 'random'}
+                            onChange={(e) => setChunkSelection(e.target.value as 'random' | 'user')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-zinc-600 rounded bg-zinc-900"
+                          />
+                          <span className="ml-2 text-sm text-zinc-300">Random (AI picks 3 chunks)</span>
+                        </label>
+                        
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            value="user"
+                            checked={chunkSelection === 'user'}
+                            onChange={(e) => setChunkSelection(e.target.value as 'random' | 'user')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-zinc-600 rounded bg-zinc-900"
+                          />
+                          <span className="ml-2 text-sm text-zinc-300">Manual (You pick 3 chunks)</span>
+                        </label>
+                      </div>
+
+                      {chunkSelection === 'user' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-zinc-300">
+                              Select up to 3 chunks: {selectedChunks.length}/3
+                            </span>
+                            <button
+                              onClick={resetChunkSelection}
+                              className="text-xs text-blue-400 hover:text-blue-300"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-5 gap-2 max-h-32 overflow-y-auto">
+                            {Array.from({ length: chunkCount }, (_, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleChunkToggle(i)}
+                                disabled={!selectedChunks.includes(i) && selectedChunks.length >= 3}
+                                className={`px-2 py-1 text-xs rounded border transition-colors ${
+                                  selectedChunks.includes(i)
+                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                    : selectedChunks.length >= 3
+                                    ? 'bg-zinc-600 border-zinc-500 text-zinc-400 cursor-not-allowed'
+                                    : 'bg-zinc-700 border-zinc-600 text-zinc-300 hover:bg-zinc-600'
+                                }`}
+                              >
+                                {i}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Chat Messages */}
+                <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                  {chatMessages.map((message, index) => (
+                    <div key={index} className="space-y-2">
+                      {/* Question */}
+                      <div className="bg-zinc-700 rounded-lg p-4 border border-zinc-600">
+                        <div className="flex items-center mb-2">
+                          <svg className="w-4 h-4" fill="#3b82f6" width="16" height="16">
+                            <path d="M8.707 7.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l2-2a1 1 0 00-1.414-1.414L11 7.586V3a1 1 0 10-2 0v4.586l-.293-.293z"/>
+                          </svg>
+                          <span className="text-sm font-medium text-zinc-300 ml-2">Your Question</span>
+                          <span className="text-xs text-zinc-500 ml-auto">
+                            {message.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-zinc-200">{message.question}</p>
+                      </div>
+                      
+                      {/* Answer */}
+                      <div className="bg-blue-900/20 rounded-lg p-4 border border-blue-700/30">
+                        <div className="flex items-center mb-2">
+                          <svg className="w-4 h-4" fill="#06b6d4" width="16" height="16">
+                            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                          </svg>
+                          <span className="text-sm font-medium text-zinc-300 ml-2">AI Answer</span>
+                        </div>
+                        <p className="text-zinc-200 whitespace-pre-wrap">{message.answer}</p>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Loading indicator */}
+                  {chatLoading && (
+                    <div className="bg-blue-900/20 rounded-lg p-4 border border-blue-700/30">
+                      <div className="flex items-center">
+                        <svg className="animate-spin w-4 h-4" fill="#06b6d4" width="16" height="16">
+                          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 5.938l3-2.647z"/>
+                        </svg>
+                        <span className="text-sm text-zinc-300 ml-2">Thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Question Input */}
+                <form onSubmit={handleChatSubmit} className="space-y-4">
+                  <div>
+                    <label htmlFor="question" className="block text-sm font-medium text-zinc-300 mb-2">
+                      Ask a question about {analysis.title}
+                    </label>
+                    <textarea
+                      id="question"
+                      value={currentQuestion}
+                      onChange={(e) => setCurrentQuestion(e.target.value)}
+                      placeholder="e.g., What happens to the main character? Who is the villain? What is the main conflict?"
+                      className="w-full px-4 py-3 border border-zinc-600 rounded-lg bg-zinc-900 text-zinc-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+                      rows={3}
+                      disabled={chatLoading || (chunkSelection === 'user' && selectedChunks.length === 0)}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!currentQuestion.trim() || chatLoading || (chunkSelection === 'user' && selectedChunks.length === 0)}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                  >
+                    {chatLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-4 w-4" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none">
+                          <circle className="opacity-25" cx="8" cy="8" r="6" stroke="white" strokeWidth="2"></circle>
+                          <path className="opacity-75" fill="white" d="M2 8a6 6 0 016-6V0C2.686 0 0 2.686 0 6h4zm2 4.291A5.962 5.962 0 012 8H0c0 2.042 1.135 3.824 3 5.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-3" fill="white" width="16" height="16">
+                          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+                          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                        </svg>
+                        Ask Question
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
             )}
           </section>

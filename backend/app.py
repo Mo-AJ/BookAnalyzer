@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random   
 import asyncio
 import json
 import os
@@ -21,17 +22,17 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 
 MODEL_PRIMARY = "llama-3.3-70b-versatile"
+MODEL_FALLBACK2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MODEL_FALLBACK2 = "llama-3.1-8b-instant"
+MAX_TOTAL_BOOK_TOKENS = 20_000 # discard the rest
 MAX_COMPLETION_TOKENS = 1_024
-MAX_TOKENS_INPUT = 6_000            # keeps total within 8 192 context window
-OVERLAP_TOKENS = 200
-PARALLEL_LIMIT = 12                 # max concurrent Groq requests
+MAX_TOKENS_INPUT = 1800            # keeps total within 8 192 context window
+OVERLAP_TOKENS = 100
+PARALLEL_LIMIT = 10                 # max concurrent Groq requests
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 ## Debugging configs
-DEBUG = bool(os.getenv("DEBUG", "1"))
 MODEL_DEBUG2 = "meta-llama/llama-4-maverick-17b-128e-instruct"
 MODEL_DEBUG = "meta-llama/llama-4-scout-17b-16e-instruct"
 # MODEL_DEBUG = "llama-3.3-70b-versatile"
@@ -39,12 +40,22 @@ MODEL_DEBUG = "meta-llama/llama-4-scout-17b-16e-instruct"
 MAX_COMPLETION_TOKENS_DBG = 256
 MAX_TOKENS_INPUT_DEBUG    = 1500    
 
-
+## Chatbot configs
+CHATBOT_MODEL2 = "llama-3.1-8b-instant"
+CHATBOT_MODEL = "llama3-70b-8192"
 
 load_dotenv()
+
+# Debugging configs - moved after load_dotenv()
+DEBUG = bool(int(os.getenv("DEBUG", "0")))
+
 API_KEY = os.getenv("GROQ_API_KEY")
 if not API_KEY:
     raise RuntimeError("GROQ_API_KEY is not set – add it to your shell env or a .env file")
+
+# Debug: show current DEBUG value
+print(f"[STARTUP] DEBUG value: {DEBUG}")
+print(f"[STARTUP] Environment DEBUG: {os.getenv('DEBUG')}")
 
 # ---------------------------------------------------------------------------
 # UTILS – logging & caching
@@ -87,16 +98,29 @@ except KeyError:
     print("Tokens failed to encrypt")
     exit()
 
-def chunk_by_tokens(text: str, max_in: int = MAX_TOKENS_INPUT, overlap: int = OVERLAP_TOKENS) -> List[str]:
+def chunk_by_tokens( text: str, max_in: int = MAX_TOKENS_INPUT,
+    overlap: int = OVERLAP_TOKENS, max_total: int = MAX_TOTAL_BOOK_TOKENS) -> List[str]:
+  
     tokens = enc.encode(text)
     chunks: List[str] = []
+    used = 0
     i = 0
-    while i < len(tokens):
-        chunk_tokens = tokens[i : i + max_in]
-        chunks.append(enc.decode(chunk_tokens))
+
+    while i < len(tokens) and used < max_total:
+        slice_tokens = tokens[i : i + max_in]
+        if used + len(slice_tokens) > max_total:
+            slice_tokens = slice_tokens[: max_total - used]
+
+        chunks.append(enc.decode(slice_tokens))
+        used += len(slice_tokens)
         i += max_in - overlap
-    log(f"Chunked into {len(chunks)} pieces (≤{max_in} tokens each)")
+
+    log(
+        f"Chunked into {len(chunks)} pieces "
+        f"({used} / {max_total} tokens kept, ≤{max_in} each)"
+    )
     return chunks
+
 
 # ---------------------------------------------------------------------------
 # GROQ LLM TOOL SCHEMA
@@ -267,8 +291,11 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
     chunks = chunk_by_tokens(book["text"], max_in=chunk_size)
 
-    if DEBUG:   
-        chunks = chunks[:4]    # only use a few chunks for debugging
+    # save chunks for when the user wants more analysis on the same book
+    cache.save(chunks, "books_chunks", book_id)
+
+    # if DEBUG:   
+    #     chunks = chunks[:4]    # only use a few chunks for debugging
 
     sem = asyncio.Semaphore(PARALLEL_LIMIT)
     tasks = [call_groq(c, i, len(chunks), names_only, sem) for i, c in enumerate(chunks)]
@@ -342,9 +369,191 @@ def test_book(book_id: str):
         "author": book["author"]
     })
 
+
+# ---------------------------------------------------------------------------
+# CHATBOT
+# ---------------------------------------------------------------------------
+
+
+async def call_groq_simple(prompt: str,
+                           sem: asyncio.Semaphore) -> str:
+    """Same as call_groq but without function-calling"""
+  
+    models: tuple[str, ...] = (CHATBOT_MODEL, CHATBOT_MODEL2)
+
+    async with sem:
+        for model in models:
+            try:
+                log(f"[DEBUG] Trying model: {model}")
+                resp = await groq_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system",
+                         "content": "You are a helpful literary assistant. Answer questions about books based on the provided text. Be helpful and informative. Only respond with 'NO_DATA' if the text contains absolutely no relevant information to answer the question."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_completion_tokens=MAX_COMPLETION_TOKENS_DBG
+                    if DEBUG else MAX_COMPLETION_TOKENS,
+                    temperature=0.7,
+                )
+                response = resp.choices[0].message.content.strip()
+                log(f"[DEBUG] Model {model} response: {response[:100]}...")  # First 100 chars
+                return response
+            except Exception as ex:
+                log(f"[chunk-call] {model} failed: {ex}")
+                await asyncio.sleep(0.5)
+
+    # all models failed
+    log(f"[DEBUG] All models failed for prompt: {prompt[:100]}...")
+    return "NO_DATA"
+
+async def single_call(prompt: str) -> str:
+    "Call the main chatbot agent"
+
+    models: tuple[str, ...] = (CHATBOT_MODEL, CHATBOT_MODEL2)
+
+    for model in models:
+        try:
+            resp = await groq_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system",
+                     "content": "You are a knowledgeable literary assistant. Provide clear, accurate, concise, and helpful answers about books and literature. Write in a conversational but informative tone."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_completion_tokens=MAX_COMPLETION_TOKENS,
+                temperature=0.8,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as ex:
+            log(f"[synthesis] {model} failed: {ex}")
+            await asyncio.sleep(0.5)
+
+    return "Sorry, I couldn't generate an answer right now."
+
+QUESTION_PROMPT = """
+Based on the following text chunk, answer the user's question as best you can. 
+If the chunk contains relevant information, provide a helpful answer.
+If the chunk has no relevant information at all, respond with: "NO_DATA"
+
+User question: "{question}"
+Chunk:
+\"\"\"
+{chunk}
+\"\"\"
+"""
+
+async def answer_question(book_id: str, question: str, chunks: list[str], chunk_selection: str = "random", selected_chunks: list[int] = None) -> str:
+
+    # Determine which chunks to use
+    if chunk_selection == "user" and selected_chunks:
+        # Validate user-selected chunks
+        valid_chunks = []
+        for chunk_idx in selected_chunks:
+            if 0 <= chunk_idx < len(chunks):
+                valid_chunks.append(chunks[chunk_idx])
+            else:
+                return f"Error: Chunk {chunk_idx} is out of range. Available chunks: 0-{len(chunks)-1}"
+        
+        if len(valid_chunks) == 0:
+            return "Error: No valid chunks selected. Please select chunks between 0 and {len(chunks)-1}."
+        
+        sample = valid_chunks
+        log(f"[DEBUG] User selected chunks: {selected_chunks}")
+    else:
+        # pick only 3 random chunks to answer the question due to rate limits
+        sample = random.sample(chunks, k=min(3, len(chunks)))
+        log(f"[DEBUG] Random chunk selection")
+    
+    log(f"[DEBUG] Question: {question}")
+    log(f"[DEBUG] Using {len(sample)} chunks out of {len(chunks)} total chunks")
+
+    # Debug: show chunk content
+    for i, chunk in enumerate(sample):
+        log(f"[DEBUG] Chunk {i+1} content (first 200 chars): {chunk[:200]}...")
+
+    sem   = asyncio.Semaphore(PARALLEL_LIMIT)
+    tasks = [
+        call_groq_simple(
+            QUESTION_PROMPT.format(question=question, chunk=c),
+            sem
+        ) for c in sample
+    ]
+    partials = await asyncio.gather(*tasks)
+
+    # Debug: print all responses
+    log(f"[DEBUG] All LLM responses:")
+    for i, response in enumerate(partials):
+        log(f"[DEBUG] Chunk {i+1}: {response[:200]}...")  # First 200 chars
+
+    # filter out "NO_DATA"
+    snippets = [p for p in partials if p.strip() != "NO_DATA"]
+    log(f"[DEBUG] Valid responses after filtering: {len(snippets)}")
+    
+    if not snippets:
+        return "Sorry, that information isn't in this part of the book."
+
+    # final synthesis with one more LLM call
+    synthesis_prompt = f"""Based on the following snippets from the book, answer this specific question: "{question}"
+
+Compile the knowledge from these snippets to provide a comprehensive answer:
+
+{chr(10).join(snippets)}"""
+    log(f"[DEBUG] Synthesis prompt: {synthesis_prompt[:300]}...")  # First 300 chars
+    
+    final_answer = await single_call(synthesis_prompt) # the main chatbot agent
+    log(f"[DEBUG] Final answer: {final_answer[:200]}...")  # First 200 chars
+    
+    return final_answer
+
+# our own chatbot 
+@app.route("/api/query", methods=["POST"])
+def query_route():
+    data = request.get_json(force=True)
+    book_id  = data["book_id"]
+    question = data["question"]
+    chunk_selection = data.get("chunk_selection", "random")  # "random" or "user"
+    selected_chunks = data.get("selected_chunks", None)  # list of chunk indices
+
+    # load cached chunks
+    chunks = cache.load("books_chunks", book_id)
+    if not chunks:
+        return jsonify({"error": "Run /api/analyze first"}), 400
+
+    # Validate chunk selection
+    if chunk_selection == "user":
+        if not selected_chunks:
+            return jsonify({"error": "selected_chunks is required when chunk_selection is 'user'"}), 400
+        if not isinstance(selected_chunks, list):
+            return jsonify({"error": "selected_chunks must be a list"}), 400
+        if len(selected_chunks) > 3:
+            return jsonify({"error": "Maximum 3 chunks allowed"}), 400
+
+    # ask helper LLMs in parallel (re-use call_groq but different prompt)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    answer = loop.run_until_complete(answer_question(book_id, question, chunks, chunk_selection, selected_chunks))
+    loop.close()
+
+    return jsonify({"answer": answer})
+
+# basic health check
 @app.route("/api/health")
 def health():
     return {"status": "ok"}
+
+# get chunk count for a book
+@app.route("/api/chunks/<book_id>")
+def get_chunk_count(book_id: str):
+    chunks = cache.load("books_chunks", book_id)
+    if not chunks:
+        return jsonify({"error": "Book not analyzed yet"}), 404
+    
+    return jsonify({
+        "book_id": book_id,
+        "chunk_count": len(chunks),
+        "available_chunks": list(range(len(chunks)))
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=DEBUG)
