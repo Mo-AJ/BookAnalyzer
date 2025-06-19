@@ -1,16 +1,3 @@
-"""
-Project Gutenberg Analyzer – v3
--------------------------------
-*  Async Groq calls with function-calling & JSON-mode
-*  Token-aware chunking (tiktoken)
-*  Concurrent fan-out / fan-in merge
-*  Optional file-system cache (flat JSON)
-*  Flask 2.x backend (sync wrapper around asyncio)
-
-v3 adds:
-1. `names_only` flag – keep only characters that have real names.
-2. `sentiment` on every interaction; final graph now has `count` + `strength`.
-"""
 from __future__ import annotations
 
 import asyncio

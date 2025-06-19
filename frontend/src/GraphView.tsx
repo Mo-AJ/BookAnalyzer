@@ -83,11 +83,11 @@ export default function GraphView({ characters, interactions }: Props) {
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: 900,          // narrower frame
         height: 500,
-        margin: "0 auto",
-        border: "1px solid #d1d5db",
+        border: "1px solid #52525b", // zinc-600
         overflow: "hidden",
+        borderRadius: "8px",
+        backgroundColor: "#ffffff", // white background for graph
       }}
     >
       <ForceGraph2D
@@ -155,20 +155,20 @@ export default function GraphView({ characters, interactions }: Props) {
           position: "absolute",
           top: 10,
           right: 10,
-          background: "rgba(255, 255, 255, 0.95)",
-          border: "1px solid #d1d5db",
+          background: "rgba(24, 24, 27, 0.95)", // dark zinc-900
+          border: "1px solid rgb(63, 63, 70)", // zinc-700
           borderRadius: 6,
           padding: "12px 16px",
           fontSize: 12,
           fontFamily: "Inter, sans-serif",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
         }}
       >
-        <div style={{ fontWeight: 600, marginBottom: 8, color: "#111" }}>
+        <div style={{ fontWeight: 600, marginBottom: 8, color: "#ffffff" }}>
           Graph Legend
         </div>
         <div style={{ marginBottom: 6 }}>
-          <span style={{ color: "#111" }}>●</span> Nodes: Characters (size = mentions)
+          <span style={{ color: "#ffffff" }}>●</span> Nodes: Characters (size = mentions)
         </div>
         <div style={{ marginBottom: 6 }}>
           <span style={{ color: "rgba(34,197,94,0.9)" }}>━━</span> Positive interactions
@@ -186,14 +186,15 @@ export default function GraphView({ characters, interactions }: Props) {
         ref={tipRef}
         style={{
           position: "fixed",
-          background: "rgba(0,0,0,0.8)",
-          color: "#fff",
+          background: "rgba(24, 24, 27, 0.95)", // dark zinc-900
+          color: "#ffffff",
           padding: "4px 8px",
           fontSize: 12,
           borderRadius: 4,
           pointerEvents: "none",
           display: "none",
           zIndex: 1000,
+          border: "1px solid rgb(63, 63, 70)", // zinc-700
         }}
       />
     </div>

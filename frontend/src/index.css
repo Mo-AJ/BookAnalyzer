@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Ensure dark theme works properly with softer colors */
+html, body {
+  background-color: rgb(24 24 27) !important; /* zinc-900 */
+  color: rgb(228 228 231) !important; /* zinc-200 */
+}
+
+#root {
+  background-color: rgb(24 24 27) !important; /* zinc-900 */
+  min-height: 100vh;
+}
+
+/* SVG sizing rules - more specific to avoid conflicts */
+svg:not([class*="w-"]):not([class*="h-"]) {
+  width: 1em;
+  height: 1em;
+  max-width: none;
+  max-height: none;
+}
+
+/* Specific overrides for Tailwind classes */
+svg.w-4, svg.h-4 {
+  width: 1rem !important;
+  height: 1rem !important;
+}
+
+svg.w-5, svg.h-5 {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+}
+
+svg.w-6, svg.h-6 {
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+}
