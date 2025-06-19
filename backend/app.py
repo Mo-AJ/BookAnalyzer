@@ -244,7 +244,7 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                         max_completion_tokens=max_comp,
                         temperature=0.1,    # low so that it follows the schema with less variation
                     ),
-                    timeout=30.0  # 30 second timeout per request
+                    timeout=8.0
                 )
 
                 tool_call = resp.choices[0].message.tool_calls[0]
@@ -629,6 +629,7 @@ def health():
     return {"status": "ok"}
 
 # clear cache endpoint
+# curl -X POST https://bookanalyzer.onrender.com/api/clear_cache
 @app.route("/api/clear_cache", methods=["POST"])
 def clear_cache():
     """Clear all cached data"""
