@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 MODEL_PRIMARY = "llama-3.3-70b-versatile"
 MODEL_FALLBACK2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MAX_TOTAL_BOOK_TOKENS = 20_000 # discard the rest
+MAX_TOTAL_BOOK_TOKENS = 16_000 # discard the rest
 MAX_COMPLETION_TOKENS = 1_024
 MAX_TOKENS_INPUT = 1800            # keeps total within 8 192 context window
 OVERLAP_TOKENS = 100
@@ -240,7 +240,9 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                 )
 
                 tool_call = resp.choices[0].message.tool_calls[0]
-                return json.loads(tool_call.function.arguments)
+                result = json.loads(tool_call.function.arguments)
+                print(f"success - model {model} completed chunk {idx+1}")
+                return result
             except Exception as ex:
                 log(f"Model {model} failed on chunk {idx+1}: {ex}\n")
                 await asyncio.sleep(1)
@@ -399,7 +401,7 @@ async def call_groq_simple(prompt: str,
                     model=model,
                     messages=[
                         {"role": "system",
-                         "content": "You are a helpful literary assistant. Answer questions about books based on the provided text. Be helpful and informative. Only respond with 'NO_DATA' if the text contains absolutely no relevant information to answer the question."},
+                         "content": "You are a helpful literary assistant. Answer questions about this snippet of the book based on the provided text. Be helpful and informative and concise."},
                         {"role": "user", "content": prompt}
                     ],
                     max_completion_tokens=MAX_COMPLETION_TOKENS_DBG
@@ -428,7 +430,7 @@ async def single_call(prompt: str) -> str:
                 model=model,
                 messages=[
                     {"role": "system",
-                     "content": "You are a knowledgeable literary assistant. Provide clear, accurate, concise, and helpful answers about books and literature. Write in a conversational but informative tone."},
+                     "content": "You are a knowledgeable literary assistant. Provide clear, accurate, concise, and helpful answers about the book given its snippets. Write in a conversational but informative tone."},
                     {"role": "user", "content": prompt}
                 ],
                 max_completion_tokens=MAX_COMPLETION_TOKENS,
@@ -546,7 +548,6 @@ def query_route():
     loop.close()
 
     return jsonify({"answer": answer})
-
 
 # get chunk count for a book
 @app.route("/api/chunks/<book_id>")
