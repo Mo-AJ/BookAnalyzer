@@ -603,5 +603,76 @@ def character_image():
 def health():
     return {"status": "ok"}
 
+# clear cache endpoint
+@app.route("/api/clear_cache", methods=["POST"])
+def clear_cache():
+    """Clear all cached data"""
+    try:
+        import shutil
+        
+        # Check if cache directory exists
+        if CACHE_DIR.exists():
+            # Remove the entire cache directory and its contents
+            shutil.rmtree(CACHE_DIR)
+            # Recreate the empty cache directory
+            CACHE_DIR.mkdir(exist_ok=True)
+            
+            return jsonify({
+                "status": "success",
+                "message": "Cache cleared successfully",
+                "cache_dir": str(CACHE_DIR)
+            }), 200
+        else:
+            return jsonify({
+                "status": "success", 
+                "message": "Cache directory was already empty",
+                "cache_dir": str(CACHE_DIR)
+            }), 200
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to clear cache: {str(e)}"
+        }), 500
+
+# get cache info endpoint
+@app.route("/api/cache_info")
+def cache_info():
+    """Get information about the cache directory"""
+    try:
+        if not CACHE_DIR.exists():
+            return jsonify({
+                "status": "success",
+                "cache_dir": str(CACHE_DIR),
+                "exists": False,
+                "size": 0,
+                "items": 0
+            }), 200
+        
+        # Calculate cache size and count items
+        total_size = 0
+        total_items = 0
+        
+        for root, dirs, files in os.walk(CACHE_DIR):
+            for file in files:
+                file_path = Path(root) / file
+                total_size += file_path.stat().st_size
+                total_items += 1
+        
+        return jsonify({
+            "status": "success",
+            "cache_dir": str(CACHE_DIR),
+            "exists": True,
+            "size_bytes": total_size,
+            "size_mb": round(total_size / (1024 * 1024), 2),
+            "items": total_items
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to get cache info: {str(e)}"
+        }), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=DEBUG)
