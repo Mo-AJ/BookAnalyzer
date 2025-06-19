@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 MODEL_PRIMARY = "llama-3.3-70b-versatile"
 MODEL_FALLBACK2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MAX_TOTAL_BOOK_TOKENS = 10_000 # discard the rest
+MAX_TOTAL_BOOK_TOKENS = 12_000 # discard the rest
 MAX_COMPLETION_TOKENS = 1_024
 MAX_TOKENS_INPUT = 1_024            # keeps total within 8 192 context window
 OVERLAP_TOKENS = 100

@@ -180,8 +180,8 @@ function App() {
       if (prev.includes(chunkIndex)) {
         return prev.filter(c => c !== chunkIndex);
       } else {
-        if (prev.length >= 3) {
-          return prev; // Don't add more than 3
+        if (prev.length >= 4) {
+          return prev; // Don't add more than 4
         }
         return [...prev, chunkIndex];
       }
@@ -514,7 +514,7 @@ function App() {
                             onChange={(e) => setChunkSelection(e.target.value as 'random' | 'user')}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-zinc-600 rounded bg-zinc-900"
                           />
-                          <span className="ms-3 text-sm text-zinc-300">Random (AI picks 3 chunks)</span>
+                          <span className="ms-3 text-sm text-zinc-300">Random (AI picks 4 chunks)</span>
                         </label>
                         
                         <label className="flex items-center">
@@ -525,7 +525,7 @@ function App() {
                             onChange={(e) => setChunkSelection(e.target.value as 'random' | 'user')}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-zinc-600 rounded bg-zinc-900"
                           />
-                          <span className="ms-3 text-sm text-zinc-300">Manual (You pick 3 chunks)</span>
+                          <span className="ms-3 text-sm text-zinc-300">Manual (You pick 4 chunks)</span>
                         </label>
                       </div>
 
@@ -533,7 +533,7 @@ function App() {
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-zinc-300">
-                              Select up to 3 chunks: {selectedChunks.length}/3
+                              Select up to 4 chunks: {selectedChunks.length}/4
                             </span>
                             <button
                               onClick={resetChunkSelection}
@@ -548,11 +548,11 @@ function App() {
                               <button
                                 key={i}
                                 onClick={() => handleChunkToggle(i)}
-                                disabled={!selectedChunks.includes(i) && selectedChunks.length >= 3}
+                                disabled={!selectedChunks.includes(i) && selectedChunks.length >= 4}
                                 className={`px-3 py-2 text-xs rounded border transition-colors ${
                                   selectedChunks.includes(i)
                                     ? 'bg-blue-600 border-blue-500 text-white'
-                                    : selectedChunks.length >= 3
+                                    : selectedChunks.length >= 4
                                     ? 'bg-zinc-600 border-zinc-500 text-zinc-400 cursor-not-allowed'
                                     : 'bg-zinc-700 border-zinc-600 text-zinc-300 hover:bg-zinc-600'
                                 }`}
