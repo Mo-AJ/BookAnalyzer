@@ -26,7 +26,7 @@ MODEL_FALLBACK2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_FALLBACK = "meta-llama/llama-4-maverick-17b-128e-instruct"
 MAX_TOTAL_BOOK_TOKENS = 16_000 # discard the rest
 MAX_COMPLETION_TOKENS = 1_024
-MAX_TOKENS_INPUT = 1800            # keeps total within 8 192 context window
+MAX_TOKENS_INPUT = 1_024            # keeps total within 8 192 context window
 OVERLAP_TOKENS = 100
 PARALLEL_LIMIT = 10                 # max concurrent Groq requests
 CACHE_DIR = Path("cache")
@@ -42,7 +42,7 @@ MODEL_DEBUG2 = "meta-llama/llama-4-maverick-17b-128e-instruct"
 # MODEL_DEBUG = "llama-3.3-70b-versatile"
 #MODEL_DEBUG2 = "llama3-70b-8192"      # good JSON + generous rate-limits
 MAX_COMPLETION_TOKENS_DBG = 256
-MAX_TOKENS_INPUT_DEBUG    = 1500    
+MAX_TOKENS_INPUT_DEBUG = MAX_COMPLETION_TOKENS  
 
 ## Chatbot configs
 CHATBOT_MODEL2 = "llama-3.1-8b-instant"
