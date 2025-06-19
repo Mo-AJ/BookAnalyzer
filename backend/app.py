@@ -185,13 +185,15 @@ TOOLS = [
 PROMPT_BASE = """
 You are processing chunk {idx}/{total} from a Project Gutenberg book.
 
+{names_rule}
+
 **Output MUST be a single JSON tool call** that follows the given schema – *no extra commentary*.
 
 Instructions:
-- Extract all named characters and how many times each is mentioned in this chunk.
+- {character_instruction}
 - Detect every direct interaction (dialogue, confrontation, cooperation, etc.) between two characters.
 - For each interaction add a `sentiment` score: 1 if positive/friendly, 0 if neutral/unclear, -1 if negative/hostile.
-{names_rule}
+
 Text:
 """
 
@@ -199,13 +201,24 @@ def build_prompt(idx: int, total: int, names_only: bool) -> str:
     """Build the prompt for the Groq request"""
 
     names_rule = (
-        "- **names_only mode is ON**: **ignore** entities that are not *proper names* "
-        "(skip descriptors like 'the red man', 'the nurse', 'God'). "
-        "- **Also exclude pronouns** like 'I', 'he', 'she', 'they', 'we', 'you'."
+        "**NAMES-ONLY MODE**: Only extract proper names (e.g., 'Sherlock Holmes', 'Watson'). "
+        "**EXCLUDE**: pronouns (I, he, she, they, we, you), descriptors ('the red man', 'the nurse'), and generic terms."
         if names_only else
-        "- Include any recurring character or well-defined entity (named or descriptive)."
+        "Include any recurring character or well-defined entity (named or descriptive)."
     )
-    return PROMPT_BASE.format(idx=idx+1, total=total, names_rule=names_rule)
+    
+    character_instruction = (
+        "Extract all proper names and count their mentions in this chunk."
+        if names_only else
+        "Extract all characters and how many times each is mentioned in this chunk."
+    )
+    
+    return PROMPT_BASE.format(
+        idx=idx+1, 
+        total=total, 
+        names_rule=names_rule,
+        character_instruction=character_instruction
+    )
 
 # ---------------------------------------------------------------------------
 # ASYNC LLM CALL
