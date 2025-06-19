@@ -8,6 +8,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+import urllib.parse
 
 import requests
 import tiktoken
@@ -33,8 +34,12 @@ CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 ## Debugging configs
+MODEL_DEBUG = "qwen-qwq-32b"
+#MODEL_DEBUG = "llama-3.3-70b-versatile"
+MODEL_DEBUG3 = "mistral-saba-24b"
 MODEL_DEBUG2 = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MODEL_DEBUG = "meta-llama/llama-4-scout-17b-16e-instruct"
+# MODEL_DEBUG = "meta-llama/llama-4-maverick-17b-128e-instruct"
+# MODEL_DEBUG2 = "meta-llama/llama-4-scout-17b-16e-instruct"
 # MODEL_DEBUG = "llama-3.3-70b-versatile"
 #MODEL_DEBUG2 = "llama3-70b-8192"      # good JSON + generous rate-limits
 MAX_COMPLETION_TOKENS_DBG = 256
@@ -106,19 +111,22 @@ def chunk_by_tokens( text: str, max_in: int = MAX_TOKENS_INPUT,
     used = 0
     i = 0
 
-    while i < len(tokens) and used < max_total:
+    while i < len(tokens) and (max_total is None or used < max_total):
         slice_tokens = tokens[i : i + max_in]
-        if used + len(slice_tokens) > max_total:
+        if max_total is not None and used + len(slice_tokens) > max_total:
             slice_tokens = slice_tokens[: max_total - used]
 
         chunks.append(enc.decode(slice_tokens))
         used += len(slice_tokens)
         i += max_in - overlap
 
-    log(
-        f"Chunked into {len(chunks)} pieces "
-        f"({used} / {max_total} tokens kept, ≤{max_in} each)"
-    )
+    if max_total is None:
+        log(f"Chunked into {len(chunks)} pieces (≤{max_in} tokens each, no limit)")
+    else:
+        log(
+            f"Chunked into {len(chunks)} pieces "
+            f"({used} / {max_total} tokens kept, ≤{max_in} each)"
+        )
     return chunks
 
 
@@ -202,7 +210,7 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
     async with sem:
 
         models: tuple[str, ...] = (
-            (MODEL_DEBUG, MODEL_DEBUG2) # more generous rate limits and lower qualities, so exposes bugs
+            (MODEL_DEBUG, MODEL_DEBUG2, MODEL_DEBUG3) # more generous rate limits and lower qualities, so exposes bugs
             if DEBUG else
             (MODEL_PRIMARY, MODEL_FALLBACK, MODEL_FALLBACK2)
         )
@@ -288,17 +296,19 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
     if (cached_graph):
         return cached_graph
 
-    chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
-    chunks = chunk_by_tokens(book["text"], max_in=chunk_size)
+    # Save ALL chunks to cache for chatbot use (no token limit)
+    all_chunks = chunk_by_tokens(book["text"], max_in=MAX_TOKENS_INPUT, overlap=OVERLAP_TOKENS, max_total=None)
+    cache.save(all_chunks, "books_chunks", book_id)
 
-    # save chunks for when the user wants more analysis on the same book
-    cache.save(chunks, "books_chunks", book_id)
+    # Use limited chunks for analysis (20k token limit)
+    chunk_size = MAX_TOKENS_INPUT_DEBUG if DEBUG else MAX_TOKENS_INPUT
+    analysis_chunks = chunk_by_tokens(book["text"], max_in=chunk_size, max_total=MAX_TOTAL_BOOK_TOKENS)
 
     # if DEBUG:   
     #     chunks = chunks[:4]    # only use a few chunks for debugging
 
     sem = asyncio.Semaphore(PARALLEL_LIMIT)
-    tasks = [call_groq(c, i, len(chunks), names_only, sem) for i, c in enumerate(chunks)]
+    tasks = [call_groq(c, i, len(analysis_chunks), names_only, sem) for i, c in enumerate(analysis_chunks)]
     results = await asyncio.gather(*tasks)
 
     # merge results
@@ -537,10 +547,6 @@ def query_route():
 
     return jsonify({"answer": answer})
 
-# basic health check
-@app.route("/api/health")
-def health():
-    return {"status": "ok"}
 
 # get chunk count for a book
 @app.route("/api/chunks/<book_id>")
@@ -554,6 +560,42 @@ def get_chunk_count(book_id: str):
         "chunk_count": len(chunks),
         "available_chunks": list(range(len(chunks)))
     })
+
+
+# ---------------------------------------------------------------------------
+# CHARACTER IMAGE
+# ---------------------------------------------------------------------------
+
+@app.route("/api/character_image")
+def character_image():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return {"error": "missing name"}, 400
+
+    # 1) try Wikipedia summary endpoint
+    wiki = (
+        "https://en.wikipedia.org/api/rest_v1/page/summary/"
+        + urllib.parse.quote(name)
+    )
+    try:
+        data = requests.get(wiki, timeout=4).json()
+        thumb = data.get("thumbnail", {}).get("source")
+        if thumb:
+            return {"url": thumb}
+    except Exception:
+        pass  # network or JSON error → ignore
+
+    # 2) deterministic SVG avatar as fallback
+    avatar = (
+        "https://api.dicebear.com/7.x/bottts/svg?seed="
+        + urllib.parse.quote(name)
+    )
+    return {"url": avatar}
+
+# basic health check
+@app.route("/api/health")
+def health():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=DEBUG)
