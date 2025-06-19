@@ -200,7 +200,8 @@ def build_prompt(idx: int, total: int, names_only: bool) -> str:
 
     names_rule = (
         "- **names_only mode is ON**: **ignore** entities that are not *proper names* "
-        "(skip descriptors like 'the red man', 'the nurse', 'God')."
+        "(skip descriptors like 'the red man', 'the nurse', 'God'). "
+        "- **Also exclude pronouns** like 'I', 'he', 'she', 'they', 'we', 'you'."
         if names_only else
         "- Include any recurring character or well-defined entity (named or descriptive)."
     )
