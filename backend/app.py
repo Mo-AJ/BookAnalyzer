@@ -69,6 +69,19 @@ def log(msg: str) -> None:
         print(msg, flush=True)
 
 
+def normalize_character_name(name: str) -> str:
+    """Normalize character names for consistency"""
+    # Remove leading "the" or "The" and strip whitespace
+    name = name.strip()
+    if name.lower().startswith("the "):
+        name = name[4:].strip()
+    
+    # Capitalize first letter
+    if name:
+        name = name[0].upper() + name[1:]
+    
+    return name
+
 class FileCache:
     """file-system cache that stores and retrieves JSON objects."""
 
@@ -112,6 +125,11 @@ def chunk_by_tokens( text: str, max_in: int = MAX_TOKENS_INPUT,
     overlap: int = OVERLAP_TOKENS, max_total: int = MAX_TOTAL_BOOK_TOKENS) -> List[str]:
   
     tokens = enc.encode(text)
+    
+    # Skip first 150 tokens to avoid headers/footers
+    start_index = min(150, len(tokens))
+    tokens = tokens[start_index:]
+    
     chunks: List[str] = []
     used = 0
     i = 0
@@ -364,9 +382,9 @@ async def analyze_book_async(book_id: str, names_only: bool) -> Dict[str, Any]:
             log(f"Chunk {i+1} failed with exception: {res}")
             continue
         for ch in res.get("characters", []):
-            char_counter[ch["name"]] += ch["mentions"]
+            char_counter[normalize_character_name(ch["name"])] += ch["mentions"]
         for inter in res.get("interactions", []):
-            a, b = sorted([inter["from"], inter["to"]])
+            a, b = sorted([normalize_character_name(inter["from"]), normalize_character_name(inter["to"])])
             edge = edge_data[(a, b)]
             edge["count"] += 1
             edge["strength"] += inter.get("sentiment", 0)
