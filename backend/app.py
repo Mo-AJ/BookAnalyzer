@@ -259,7 +259,7 @@ async def call_groq(chunk: str, idx: int, total: int, names_only: bool, sem: asy
                 messages = [
                     {
                         "role": "system",
-                        "content": "You are a literary analyst. Respond ONLY with the required JSON tool call."
+                        "content": "You are a literary analyst. Respond ONLY with the required JSON tool call. Never include Project Gutenberg* or Gutenberg* in your response."
                     },
                     {
                         "role": "user",
