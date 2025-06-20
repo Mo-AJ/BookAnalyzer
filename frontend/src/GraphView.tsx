@@ -35,7 +35,7 @@ export default function GraphView({ characters, interactions }: Props) {
 
     const ns: NodeObject[] = top.map((c) => ({
       id: c.name,
-      val: 14 + Math.log1p(c.mentions) * 6, // base radius 14px; gentle scaling
+      val: 12 + Math.min(Math.log1p(c.mentions) * 3, 8), // base radius 12px; max additional 8px
     }));
 
     const ls: LinkObject[] = interactions
@@ -55,8 +55,8 @@ export default function GraphView({ characters, interactions }: Props) {
     if (!fgRef.current) return;
 
     fgRef.current
-      .d3Force("charge", d3.forceManyBody().strength(-200))
-      .d3Force("link")?.distance(120);
+      .d3Force("charge", d3.forceManyBody().strength(-5))
+      .d3Force("link")?.distance(40);
 
     /* keep nodes from overlapping so links don't cross through */
     fgRef.current.d3Force(
