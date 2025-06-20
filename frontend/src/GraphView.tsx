@@ -35,7 +35,7 @@ export default function GraphView({ characters, interactions }: Props) {
 
     const ns: NodeObject[] = top.map((c) => ({
       id: c.name,
-      val: 12 + Math.min(Math.log1p(c.mentions) * 3, 8), // base radius 12px; max additional 8px
+      val: 18 + Math.min(Math.log1p(c.mentions) * 3, 8), // base radius 18px; max additional 8px
     }));
 
     const ls: LinkObject[] = interactions
