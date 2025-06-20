@@ -183,7 +183,7 @@ TOOLS = [
 ]
 
 PROMPT_BASE = """
-You are processing chunk {idx}/{total} from a Project Gutenberg book.
+You are analyzing chunk {idx}/{total} from a book.
 
 {names_rule}
 
@@ -194,7 +194,7 @@ Instructions:
 - Detect every direct interaction (dialogue, confrontation, cooperation, etc.) between two characters.
 - For each interaction add a `sentiment` score: 1 if positive/friendly, 0 if neutral/unclear, -1 if negative/hostile.
 
-Text:
+Start your analysis on this chunk:
 """
 
 def build_prompt(idx: int, total: int, names_only: bool) -> str:
